@@ -1,0 +1,102 @@
+---
+- hosts: "{{ kvm | default('kvm12') }}"
+  gather_facts: no
+  vars_files:
+    - vm.yml
+
+  tasks:
+    - name: remove known_hosts
+      command: ssh-keygen -f "$HOME/.ssh/known_hosts" -R "{{ item.value.IP }}"
+      delegate_to: localhost
+      loop: "{{ guests|dict2items }}"
+
+    - name: create dir
+      file:
+        path: "{{ vm_location }}/{{ item.key }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ guests|dict2items }}" 
+   
+    - name: copy preseed template
+      template:
+        src: preseed.cfg.j2
+        dest: "{{ vm_location }}/{{ item.key }}/preseed.cfg"
+        owner: root
+        group: root
+        mode: 0755
+      when: item.value.os_type != "rhel7"
+      loop: "{{ guests|dict2items }}"
+   
+    - name: copy kickstart template
+      template:
+        src: ks.cfg.j2
+        dest: "{{ vm_location }}/{{ item.key }}/ks.cfg"
+        owner: root
+        group: root
+        mode: 0755
+      when: item.value.os_type == "rhel7"
+      loop: "{{ guests|dict2items }}"
+
+    - name: virt-install (ubuntu 18.04)
+      command: >
+              virt-install
+              --name {{ item.key }} --memory={{ item.value.mem }}
+              --disk path={{ vm_location }}/{{ item.key }}.{{ item.value.file_type }},size={{ item.value.size }},format={{ item.value.file_type }},bus=virtio,cache=none 
+              --vcpus {{ item.value.cpus }}
+              --os-type linux --os-variant {{ item.value.os_type }}
+              --network bridge={{ item.value.bridge }},model=virtio
+              --console pty,target_type=serial
+              --location <ubuntu installed image mirror sites or you ftp site>
+              --initrd-inject={{ vm_location }}/{{ item.key }}/preseed.cfg
+              --noreboot --graphics none
+              --extra-args "console=ttyS0,115200n8,serial" 
+              --debug
+      when: item.value.os_type == "ubuntu17.04"
+      loop: "{{ guests|dict2items }}"
+    
+    - name: virt-install (CentOS7)
+      command: >
+              virt-install
+              --name {{ item.key }} --memory={{ item.value.mem }}
+              --disk path={{ vm_location }}/{{ item.key }}.{{ item.value.file_type }},size={{ item.value.size }},format={{ item.value.file_type }},bus=virtio,cache=none 
+              --vcpus {{ item.value.cpus }}
+              --os-type linux --os-variant {{ item.value.os_type }}
+              --network bridge={{ item.value.bridge }},model=virtio
+              --console pty,target_type=serial
+              --location <CentOS7 installed image mirror sites or you ftp site>
+              --initrd-inject={{ vm_location }}/{{ item.key }}/ks.cfg
+              --noreboot --graphics spice
+              --extra-args  "console=ttyS0,115200n8,serial"
+              --extra-args "ks=file:/ks.cfg"
+              --debug
+      when: item.value.os_type == "rhel7"
+      loop: "{{ guests|dict2items }}"
+
+    - name: add new host
+      add_host:
+        name: '{{ item.value.IP }}'
+        groups: test
+      loop: "{{ guests|dict2items }}"
+
+    - name: list ALL VMs
+      virt:
+        command: list_vms
+      register: vms
+    
+    - name: remove VM autoinstall dir
+      file:
+        path: "{{ vm_location }}/{{ item.key }}"
+        state: absent
+      loop: "{{ guests|dict2items }}"
+      when: item.key in vms.list_vms
+      notify: start VM
+    
+    - pause:
+        seconds: 40
+        
+  handlers:
+    - name: start VM
+      virt:
+        name: "{{ item.key }}"
+        state: running
+      loop: "{{ guests|dict2items }}"
