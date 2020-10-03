@@ -1,0 +1,68 @@
+# System authorization information
+auth --enableshadow --passalgo=sha512 --enableldap --enableldapauth --ldapserver=ldap.example.com.tw --ldapbasedn="dc=example,dc=com,dc=tw" --enablemkhomedir
+# Use CDROM installation media
+#cdrom
+install
+repo --name="CentOS" --baseurl="http://mirror.centos.org/centos/7/os/x86_64/"
+# dont use graphical install, use text install
+text
+# Run the Setup Agent on first boot
+firstboot --enable
+ignoredisk --only-use=vda
+# Keyboard layouts
+keyboard --vckeymap=us --xlayouts='us'
+# System language
+lang en_US.UTF-8
+
+# Network information
+network  --bootproto=static --device=eth0 --gateway={{ item.value.gateway }} --ip={{ item.value.IP }} --nameserver=<dns server> --netmask=255.255.255.0 --ipv6=auto --activate
+network  --hostname={{ item.value.hostnames }}
+
+# Root password
+rootpw --iscrypted <encryption password>
+# System services
+services --disabled="chronyd"
+# System timezone
+timezone Asia/Taipei --isUtc --nontp
+user --groups=wheel --name=<user name> --password=<encryption password> --iscrypted --gecos="taipay"
+# System bootloader configuration
+bootloader --append=" crashkernel=auto" --location=mbr --boot-drive=vda
+# Partition clearing information
+clearpart --none --initlabel
+# Disk partitioning information
+part /boot --fstype="xfs" --ondisk=vda --size=850 --asprimary
+part swap --size {{ item.value.swap }}
+part / --fstype ext4 --size 1 --grow
+#package
+%packages
+@^minimal
+@core
+nss-pam-ldapd
+kexec-tools
+#iftop
+#atop
+#htop
+git
+vim
+openldap-clients
+
+%end
+
+%addon com_redhat_kdump --enable --reserve-mb='auto'
+
+%end
+
+%anaconda
+pwpolicy root --minlen=6 --minquality=1 --notstrict --nochanges --notempty
+pwpolicy user --minlen=6 --minquality=1 --notstrict --nochanges --emptyok
+pwpolicy luks --minlen=6 --minquality=1 --notstrict --nochanges --notempty
+%end
+
+%post --interpreter=/usr/bin/bash --erroronfail
+sed -i '$i sudoers:\ files \ldap' /etc/nsswitch.conf
+sed -i '$i uri ldap:\/\/\ldap.\example.\com.\tw/ ' /etc/sudo-ldap.conf
+sed -i '$i sudoers_base dc=example,dc=com,dc=tw' /etc/sudo-ldap.conf
+systemctl restart nslcd
+%end
+
+poweroff
