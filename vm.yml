@@ -1,0 +1,26 @@
+vm_location: "<where vm disk image path>"
+
+guests:
+  test:
+    hostnames: test1
+    mem: 2048
+    cpus: 2
+    os_type: ubuntu17.04
+    file_type: qcow2
+    size: 30
+    swap: 4096
+    IP: <IP>
+    gateway: <gateway>
+    bridge: <br1 | br2>
+
+    #test2:
+    #hostnames: test2
+    #mem: 4096
+    #cpus: 2
+    #os_type: rhel7
+    #file_type: qcow2
+    #size: 30
+    #swap: 8192
+    #IP: <IP>
+    #gateway: <gateway>
+    #bridge: br1
