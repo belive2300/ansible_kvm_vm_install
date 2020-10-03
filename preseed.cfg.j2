@@ -1,0 +1,155 @@
+d-i auto-install/enable boolean true
+d-i debconf/priority select critical
+
+################
+#Localization ##
+################
+
+d-i debian-installer/locale string en_US
+d-i console-setup/ask_detect boolean false  
+d-i keyboard-configuration/layoutcode string us
+
+###########################
+## Network configuration ##
+###########################
+
+d-i netcfg/enable boolean true
+d-i netcfg/choose_interface select ens3
+d-i netcfg/disable_autoconfig boolean true
+
+d-i netcfg/get_ipaddress string {{ item.value.IP }}
+d-i netcfg/get_netmask string 255.255.255.0
+d-i netcfg/get_gateway string {{ item.value.gateway }}
+d-i netcfg/get_nameservers string <gateway>
+d-i netcfg/confirm_static boolean true
+
+d-i netcfg/dhcp_failed note
+d-i netcfg/dhcp_options select Configure network manually
+
+d-i netcfg/get_hostname string {{ item.value.hostnames }}
+d-i netcfg/get_domain string taipay.com.tw
+
+###############################
+## Clock and time zone setup ##
+###############################
+
+d-i clock-setup/utc boolean true
+d-i time/zone string Asia/Taipei
+d-i clock-setup/ntp boolean true
+
+#############
+# partition #
+#############
+
+d-i partman-auto/disk string /dev/vda
+d-i partman-auto/method string regular
+d-i partman-lvm/device_remove_lvm boolean true
+d-i partman-md/device_remove_md boolean true
+d-i partman-lvm/confirm boolean true
+d-i partman/default_filesystem string ext4
+###################################################################
+# ubunut pressed partman will set default swap size = 1024 MB     #
+# if you dont want ubuntu default set then must set cap-ram false #
+###################################################################
+d-i partman-auto/cap-ram string false
+###################################################################
+d-i partman-auto/choose_recipe select boot-root
+d-i partman-auto/expert_recipe string                       \
+     boot-root ::                                            \
+              900 900 900 ext4                       \
+                     $primary{ } $bootable{ }               \
+                      method{ format } format{ }              \
+                      use_filesystem{ } filesystem{ ext4 }    \
+                      mountpoint{ /boot }                     \
+              .                                       \
+              200% 100% 200% linux-swap                    \
+                      method{ swap } format{ }                \
+              .                                               \
+              2048 10000000 -1 ext4                   \
+                      method{ format } format{ }      \
+                      use_filesystem{ } filesystem{ ext4 }    \
+                      mountpoint{ / }                         \
+              .    	                                      
+                                               
+d-i partman-md/confirm boolean true
+d-i partman-partitioning/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+###############################
+### Base system installation###
+###############################
+d-i base-installer/kernel/override-image string linux-server
+
+################### 
+## Account setup ##
+###################
+d-i passwd/root-login boolean false
+###################################################################################
+# ubuntu default set with root is no password & not allow root login              #
+# if you want to use root then you can set root-login is true & set root password #
+# set password allow weak password & Clear code, also you can encryption password #
+# with sha256, MD5...etc.                                                         #
+###################################################################################
+#d-i passwd/root-password password <root passwrod>
+#d-i passwd/root-password-again password <root password`>
+d-i passwd/user-fullname string <user name>
+d-i passwd/username string <user name>
+#d-i passwd/user-password-crypted password $6$mAMfuDEyQM$Za4qBySPVsezOFZ2MQn6I8z6sp/7jFNt2/bky/0v/Ib/YcHkAercFSZxYff4MuOEU9SMr6IdPbx1Fj3/.8m771
+d-i passwd/user-password password <user name>
+d-i passwd/user-password-again password <user name>
+d-i user-setup/allow-password-weak boolean true
+d-i user-setup/encrypt-home boolean false
+
+###############
+## Apt setup ##
+###############
+
+#####################
+## Mirror settings ##
+#####################
+# here can set custom mirrir site for package download
+#d-i mirror/country string US 
+d-i mirror/country string manual
+d-i mirror/http/countries select manual
+d-i mirror/http/hostname string free.nchc.org.tw
+d-i mirror/http/directory string /ubuntu
+d-i mirror/http/proxy string
+d-i mirror/http/mirror select free.nchc.org.tw
+
+#######################
+### Package selection #
+#######################
+tasksel tasksel/first multiselect openssh-server openssh-client
+d-i pkgsel/include string git openssh-server python-simplejson sudo atop htop iftop vim libnss-ldap libpam-ldap ldap-utils nscd
+ldap-auth-config ldap-auth-config/dbrootlogin boolean true
+ldap-auth-config ldap-auth-config/ldapns/base-dn string dc=example,dc=com
+ldap-auth-config ldap-auth-config/ldapns/ldap-server string ldap://ldap.example.com
+ldap-auth-config ldap-auth-config/ldapns/ldap_version select 3
+ldap-auth-config ldap-auth-config/rootbinddn string cn=admin,dc=example,dc=com
+ldap-auth-config ldap-auth-config/rootbindpw password <ldap admin password>
+#nslcd   nslcd/ldap-uris string ldap://ldap.example.com
+#nslcd   nslcd/ldap-base string dc=example,dc=com
+d-i pkgsel/upgrade select none
+d-i pkgsel/upate-policy select none
+popularity-contest popularity-contest/participate boolean false
+
+##############################
+### Boot loader installation #
+##############################
+
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/with_other_os boolean false
+d-i finish-install/reboot_in_progress note
+d-i finish-install/keep-consoles boolean true
+
+##################
+## Last command ##
+##################
+d-i preseed/late_command string in-target sed -i 's/\(^passwd.*\)/\1 ldap/' /etc/nsswitch.conf ; \
+                                in-target sed -i 's/\(^group.*\)/\1 ldap/' /etc/nsswitch.conf ; \
+                                in-target sed -i 's/\(^shadow.*\)/\1 ldap/' /etc/nsswitch.conf ; \
+                                in-target sed -i 's/\(^sudoers.*\)/\1 ldap/' /etc/nsswitch.conf ; \
+                                in-target sh -c 'echo "session required pam_mkhomedir.so skel=/etc/skel umask=077" >> /etc/pam.d/common-session' ; \
+                                in-target systemctl restart nscd
